@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StreamStatus {
+  active
+  inactive
+}
+
+enum FilterType {
+  country
+  device
+  browser
+  language
+  os
+  ip_range
+  referrer
+  keyword
+  utm_source
+  utm_medium
+  utm_campaign
+}
+
+enum FilterOperation {
+  equals
+  contains
+  not_equals
+  regex
+}
+
+model Campaign {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  name      String?
+  code      String   @unique
+  profit    Float    @default(0)
+  expenses  Float    @default(0)
+  streams   Stream[]
+
+  @@map("campaigns")
+}
+
+model Stream {
+  id         Int          @id @default(autoincrement())
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+  campaign   Campaign     @relation(fields: [campaignId], references: [id])
+  campaignId Int          @map("campaign_id")
+  targetUrl  String       @map("target_url")
+  status     StreamStatus @default(active)
+  weight     Int          @default(1)
+  filters    Filter[]
+
+  @@map("streams")
+}
+
+model Filter {
+  id        Int             @id @default(autoincrement())
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+  stream    Stream          @relation(fields: [streamId], references: [id])
+  streamId  Int             @map("stream_id")
+  type      FilterType
+  operation FilterOperation
+  value     String
+
+  @@map("filters")
+}
