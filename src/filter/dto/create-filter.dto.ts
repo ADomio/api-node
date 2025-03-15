@@ -1,4 +1,5 @@
 import { IsEnum, IsString } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
 export enum FilterType {
   country = 'country',
@@ -22,12 +23,28 @@ export enum FilterOperation {
 }
 
 export class CreateFilterDto {
+  @ApiProperty({
+    description: 'Type of the filter',
+    enum: FilterType,
+    example: FilterType.country,
+    enumName: 'FilterType',
+  })
   @IsEnum(FilterType)
   type: FilterType;
 
+  @ApiProperty({
+    description: 'Operation to apply',
+    enum: FilterOperation,
+    example: FilterOperation.equals,
+    enumName: 'FilterOperation',
+  })
   @IsEnum(FilterOperation)
   operation: FilterOperation;
 
+  @ApiProperty({
+    description: 'Value to filter by',
+    example: 'US',
+  })
   @IsString()
   value: string;
 } 
