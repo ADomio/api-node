@@ -7,12 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum StreamStatus {
+enum Statuses {
   active
   inactive
 }
 
-enum FilterType {
+enum FilterTypes {
   country
   device
   browser
@@ -26,48 +26,77 @@ enum FilterType {
   utm_campaign
 }
 
-enum FilterOperation {
+enum FilterOperations {
   equals
   contains
   not_equals
   regex
 }
 
+enum Currencies {
+  usd
+  eur
+  rub
+}
+
 model Campaign {
-  id        Int      @id @default(autoincrement())
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id        Int               @id @default(autoincrement())
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
   name      String?
-  code      String   @unique
-  profit    Float    @default(0)
-  expenses  Float    @default(0)
+  status    Statuses          @default(active)
+  code      String            @unique
   streams   Stream[]
+  expenses  CampaignExpense[]
+  profits   CampaignProfit[]
+  currency  Currencies        @default(usd)
 
   @@map("campaigns")
 }
 
+model CampaignExpense {
+  id         Int      @id @default(autoincrement())
+  createdAt  DateTime @default(now()) @map("created_at")
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  campaignId Int      @map("campaign_id")
+  amount     Float
+
+  @@map("campaign_expenses")
+}
+
+model CampaignProfit {
+  id         Int      @id @default(autoincrement())
+  createdAt  DateTime @default(now()) @map("created_at")
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  campaignId Int      @map("campaign_id")
+  amount     Float
+
+  @@map("campaign_profits")
+}
+
 model Stream {
-  id         Int          @id @default(autoincrement())
-  createdAt  DateTime     @default(now()) @map("created_at")
-  updatedAt  DateTime     @updatedAt @map("updated_at")
-  campaign   Campaign     @relation(fields: [campaignId], references: [id])
-  campaignId Int          @map("campaign_id")
-  targetUrl  String       @map("target_url")
-  status     StreamStatus @default(active)
-  weight     Int          @default(1)
+  id         Int      @id @default(autoincrement())
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  campaignId Int      @map("campaign_id")
+  name       String?
+  targetUrl  String   @map("target_url")
+  status     Statuses @default(active)
+  weight     Int      @default(1)
   filters    Filter[]
 
   @@map("streams")
 }
 
 model Filter {
-  id        Int             @id @default(autoincrement())
-  createdAt DateTime        @default(now()) @map("created_at")
-  updatedAt DateTime        @updatedAt @map("updated_at")
-  stream    Stream          @relation(fields: [streamId], references: [id])
-  streamId  Int             @map("stream_id")
-  type      FilterType
-  operation FilterOperation
+  id        Int              @id @default(autoincrement())
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+  stream    Stream           @relation(fields: [streamId], references: [id])
+  streamId  Int              @map("stream_id")
+  type      FilterTypes
+  operation FilterOperations
   value     String
 
   @@map("filters")
