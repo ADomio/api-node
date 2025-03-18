@@ -1,12 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
-import type { Campaign } from '@prisma/client';
+import { Campaign, Statuses, Currencies } from '@prisma/client';
 import { randomBytes } from 'crypto';
+import { UpdateCampaignDto } from './dto/update-campaign.dto';
 
 @Injectable()
 export class CampaignService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private redis: RedisService,
+  ) {}
 
   private generateCode(): string {
     // Generate 3 random bytes and convert to hex
@@ -41,62 +46,43 @@ export class CampaignService {
       throw new Error('Campaign code already exists');
     }
 
-    return this.prisma.campaign.create({
+    const campaign = await this.prisma.campaign.create({
       data: {
-        ...createCampaignDto,
+        name: createCampaignDto.name,
         code,
-      },
-      include: {
-        streams: {
-          include: {
-            filters: true,
-          },
-        },
+        status: createCampaignDto.status || 'active',
+        currency: createCampaignDto.currency || 'usd',
       },
     });
+    await this.redis.setCampaign(campaign);
+    return campaign;
   }
 
   async findAll(): Promise<Campaign[]> {
-    return this.prisma.campaign.findMany({
-      include: {
-        streams: {
-          include: {
-            filters: true,
-          },
-        },
-      },
-    });
+    return this.prisma.campaign.findMany();
   }
 
   async findOne(id: number): Promise<Campaign> {
+    // Try to get from Redis first
+    const cached = await this.redis.getCampaign(id);
+    if (cached) return cached;
+
+    // If not in Redis, get from DB and cache
     const campaign = await this.prisma.campaign.findUnique({
       where: { id },
-      include: {
-        streams: {
-          include: {
-            filters: true,
-          },
-        },
-      },
     });
-
+    
     if (!campaign) {
       throw new NotFoundException(`Campaign with ID ${id} not found`);
     }
-
+    
+    await this.redis.setCampaign(campaign);
     return campaign;
   }
 
   async findByCode(code: string): Promise<Campaign> {
     const campaign = await this.prisma.campaign.findUnique({
       where: { code },
-      include: {
-        streams: {
-          include: {
-            filters: true,
-          },
-        },
-      },
     });
 
     if (!campaign) {
@@ -106,16 +92,9 @@ export class CampaignService {
     return campaign;
   }
 
-  async update(id: number, updateCampaignDto: CreateCampaignDto): Promise<Campaign> {
-    const campaign = await this.prisma.campaign.findUnique({
-      where: { id },
-    });
+  async update(id: number, updateCampaignDto: UpdateCampaignDto): Promise<Campaign> {
+    const campaign = await this.findOne(id);
 
-    if (!campaign) {
-      throw new NotFoundException(`Campaign with ID ${id} not found`);
-    }
-
-    // If code is being updated, check if new code already exists
     if (updateCampaignDto.code && updateCampaignDto.code !== campaign.code) {
       const existingCampaign = await this.prisma.campaign.findUnique({
         where: { code: updateCampaignDto.code },
@@ -126,28 +105,17 @@ export class CampaignService {
       }
     }
 
-    return this.prisma.campaign.update({
+    const updatedCampaign = await this.prisma.campaign.update({
       where: { id },
       data: updateCampaignDto,
-      include: {
-        streams: {
-          include: {
-            filters: true,
-          },
-        },
-      },
     });
+    await this.redis.setCampaign(updatedCampaign);
+    return updatedCampaign;
   }
 
   async remove(id: number): Promise<void> {
-    const campaign = await this.prisma.campaign.findUnique({
-      where: { id },
-    });
-
-    if (!campaign) {
-      throw new NotFoundException(`Campaign with ID ${id} not found`);
-    }
-
+    await this.findOne(id); // Will throw if not found
+    await this.redis.deleteCampaign(id);
     await this.prisma.campaign.delete({
       where: { id },
     });

@@ -1,12 +1,16 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { FilterModule } from './filter/filter.module';
-import { StreamModule } from './stream/stream.module';
+import { ConfigModule } from './config/config.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { RedisModule } from './redis/redis.module';
 import { CampaignModule } from './campaign/campaign.module';
+import { StreamModule } from './stream/stream.module';
+import { FilterModule } from './filter/filter.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot(),
+    ConfigModule,
+    PrismaModule,
+    RedisModule,
     CampaignModule,
     StreamModule,
     FilterModule,

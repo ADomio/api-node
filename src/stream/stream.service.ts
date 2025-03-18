@@ -1,98 +1,91 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { CreateStreamDto } from './dto/create-stream.dto';
+import { UpdateStreamDto } from './dto/update-stream.dto';
 import type { Stream } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class StreamService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private redis: RedisService,
+  ) {}
 
-  async create(createStreamDto: CreateStreamDto): Promise<Stream> {
+  async create(campaignId: number, createStreamDto: CreateStreamDto): Promise<Stream> {
     // Verify campaign exists
     const campaign = await this.prisma.campaign.findUnique({
-      where: { id: createStreamDto.campaignId },
+      where: { id: campaignId },
     });
 
     if (!campaign) {
-      throw new NotFoundException(`Campaign with ID ${createStreamDto.campaignId} not found`);
+      throw new NotFoundException(`Campaign with ID ${campaignId} not found`);
     }
 
-    return this.prisma.stream.create({
-      data: createStreamDto,
+    const stream = await this.prisma.stream.create({
+      data: {
+        ...createStreamDto,
+        campaignId,
+      },
     });
+    await this.redis.setStream(stream);
+    return stream;
   }
 
-  async findAll(campaignId?: number): Promise<Stream[]> {
-    if (campaignId) {
-      // Verify campaign exists
-      const campaign = await this.prisma.campaign.findUnique({
-        where: { id: campaignId },
-      });
+  async findAll(campaignId: number): Promise<Stream[]> {
+    // Verify campaign exists
+    const campaign = await this.prisma.campaign.findUnique({
+      where: { id: campaignId },
+    });
 
-      if (!campaign) {
-        throw new NotFoundException(`Campaign with ID ${campaignId} not found`);
-      }
-
-      return this.prisma.stream.findMany({
-        where: { campaignId },
-        include: { filters: true },
-      });
+    if (!campaign) {
+      throw new NotFoundException(`Campaign with ID ${campaignId} not found`);
     }
 
     return this.prisma.stream.findMany({
-      include: { filters: true },
+      where: { campaignId },
+      include: {
+        filters: true,
+      },
     });
   }
 
-  async findOne(id: number): Promise<Stream> {
-    const stream = await this.prisma.stream.findUnique({
-      where: { id },
-      include: { filters: true },
+  async findOne(campaignId: number, id: number): Promise<Stream> {
+    const stream = await this.prisma.stream.findFirst({
+      where: {
+        id,
+        campaignId,
+      },
+      include: {
+        filters: true,
+      },
     });
 
     if (!stream) {
-      throw new NotFoundException(`Stream with ID ${id} not found`);
+      throw new NotFoundException(`Stream with ID ${id} not found in campaign ${campaignId}`);
     }
 
     return stream;
   }
 
-  async update(id: number, updateStreamDto: CreateStreamDto): Promise<Stream> {
-    const stream = await this.prisma.stream.findUnique({
-      where: { id },
-    });
-
-    if (!stream) {
-      throw new NotFoundException(`Stream with ID ${id} not found`);
-    }
-
-    // Verify campaign exists if campaignId is being updated
-    if (updateStreamDto.campaignId) {
-      const campaign = await this.prisma.campaign.findUnique({
-        where: { id: updateStreamDto.campaignId },
-      });
-
-      if (!campaign) {
-        throw new NotFoundException(`Campaign with ID ${updateStreamDto.campaignId} not found`);
-      }
-    }
+  async update(campaignId: number, id: number, updateStreamDto: UpdateStreamDto): Promise<Stream> {
+    // Verify stream exists in campaign
+    await this.findOne(campaignId, id);
 
     return this.prisma.stream.update({
       where: { id },
       data: updateStreamDto,
-      include: { filters: true },
+      include: {
+        filters: true,
+      },
     });
   }
 
-  async remove(id: number): Promise<void> {
-    const stream = await this.prisma.stream.findUnique({
-      where: { id },
-    });
+  async remove(campaignId: number, id: number): Promise<void> {
+    // Verify stream exists in campaign
+    await this.findOne(campaignId, id);
 
-    if (!stream) {
-      throw new NotFoundException(`Stream with ID ${id} not found`);
-    }
-
+    await this.redis.deleteStream(id, campaignId);
     await this.prisma.stream.delete({
       where: { id },
     });

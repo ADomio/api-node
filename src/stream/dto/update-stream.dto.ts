@@ -2,26 +2,30 @@ import { IsString, IsNumber, IsOptional, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Statuses } from '@prisma/client';
 
-export class CreateStreamDto {
+export class UpdateStreamDto {
   @ApiProperty({
     description: 'Stream name',
     example: 'Main Traffic',
+    required: false,
   })
+  @IsOptional()
   @IsString()
-  name: string;
+  name?: string;
 
   @ApiProperty({
     description: 'Target URL',
     example: 'https://example.com',
+    required: false,
   })
+  @IsOptional()
   @IsString()
-  targetUrl: string;
+  targetUrl?: string;
 
   @ApiProperty({
     description: 'Stream status',
-    example: 'ACTIVE',
+    example: 'active',
     enum: Statuses,
-    default: 'active',
+    required: false,
   })
   @IsOptional()
   @IsEnum(Statuses)
@@ -30,7 +34,7 @@ export class CreateStreamDto {
   @ApiProperty({
     description: 'Stream weight',
     example: 100,
-    default: 100,
+    required: false,
   })
   @IsOptional()
   @IsNumber()
