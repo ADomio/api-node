@@ -40,16 +40,18 @@ enum Currencies {
 }
 
 model Campaign {
-  id        Int               @id @default(autoincrement())
-  createdAt DateTime          @default(now()) @map("created_at")
-  updatedAt DateTime          @updatedAt @map("updated_at")
-  name      String?
-  status    Statuses          @default(active)
-  code      String            @unique
-  streams   Stream[]
-  expenses  CampaignExpense[]
-  profits   CampaignProfit[]
-  currency  Currencies        @default(usd)
+  id              Int               @id @default(autoincrement())
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  name            String?
+  status          Statuses          @default(active)
+  code            String            @unique
+  streams         Stream[]
+  expenses        CampaignExpense[]
+  profits         CampaignProfit[]
+  currency        Currencies        @default(usd)
+  trafficSource   TrafficSource?    @relation(fields: [trafficSourceId], references: [id])
+  trafficSourceId Int?              @map("traffic_source_id")
 
   @@map("campaigns")
 }
@@ -100,4 +102,16 @@ model Filter {
   value     String
 
   @@map("filters")
+}
+
+model TrafficSource {
+  id          Int        @id @default(autoincrement())
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  campaigns   Campaign[]
+  name        String     @unique
+  queryParams Json
+  custom      Boolean    @default(false)
+
+  @@map("traffic_sources")
 }

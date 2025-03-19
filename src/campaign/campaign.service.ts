@@ -50,8 +50,8 @@ export class CampaignService {
       data: {
         name: createCampaignDto.name,
         code,
-        status: createCampaignDto.status || 'active',
-        currency: createCampaignDto.currency || 'usd',
+        status: createCampaignDto.status,
+        currency: createCampaignDto.currency,
       },
     });
     await this.redis.setCampaign(campaign);

@@ -1,12 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { FilterService } from './filter.service';
-import { PrismaService } from '../prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { NotFoundException } from '@nestjs/common';
-import { CreateFilterDto, FilterOperation, FilterType } from './dto/create-filter.dto';
+import { CreateFilterDto } from './dto/create-filter.dto';
+import { FilterOperations, FilterTypes } from '@prisma/client';
 
 describe('FilterService', () => {
   let service: FilterService;
   let prisma: PrismaService;
+  let redis: RedisService;
 
   const mockPrismaService = {
     stream: {
@@ -15,10 +18,16 @@ describe('FilterService', () => {
     filter: {
       create: jest.fn(),
       findMany: jest.fn(),
-      findUnique: jest.fn(),
+      findFirst: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
     },
+  };
+
+  const mockRedisService = {
+    setFilter: jest.fn(),
+    getFilter: jest.fn(),
+    deleteFilter: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -29,11 +38,16 @@ describe('FilterService', () => {
           provide: PrismaService,
           useValue: mockPrismaService,
         },
+        {
+          provide: RedisService,
+          useValue: mockRedisService,
+        },
       ],
     }).compile();
 
     service = module.get<FilterService>(FilterService);
     prisma = module.get<PrismaService>(PrismaService);
+    redis = module.get<RedisService>(RedisService);
   });
 
   afterEach(() => {
@@ -46,14 +60,14 @@ describe('FilterService', () => {
 
   describe('create', () => {
     const createDto: CreateFilterDto = {
-      type: FilterType.country,
-      operation: FilterOperation.equals,
+      type: FilterTypes.country,
+      operation: FilterOperations.equals,
       value: 'US',
     };
 
     it('should create a filter when stream exists', async () => {
       const streamId = 1;
-      const expectedResult = { id: 1, streamId, ...createDto };
+      const expectedResult = { id: 1, ...createDto, streamId };
       mockPrismaService.stream.findUnique.mockResolvedValueOnce({ id: streamId });
       mockPrismaService.filter.create.mockResolvedValueOnce(expectedResult);
 
@@ -69,6 +83,7 @@ describe('FilterService', () => {
           streamId,
         },
       });
+      expect(mockRedisService.setFilter).toHaveBeenCalledWith(expectedResult);
     });
 
     it('should throw NotFoundException when stream does not exist', async () => {
@@ -81,11 +96,12 @@ describe('FilterService', () => {
   });
 
   describe('findAll', () => {
-    it('should return all filters for a stream when stream exists', async () => {
-      const streamId = 1;
+    const streamId = 1;
+
+    it('should return filters for specific stream', async () => {
       const expectedResult = [
-        { id: 1, streamId, type: FilterType.country, operation: FilterOperation.equals, value: 'US' },
-        { id: 2, streamId, type: FilterType.browser, operation: FilterOperation.equals, value: 'Chrome' },
+        { id: 1, type: FilterTypes.country, operation: FilterOperations.equals, value: 'US', streamId },
+        { id: 2, type: FilterTypes.browser, operation: FilterOperations.equals, value: 'Chrome', streamId },
       ];
       mockPrismaService.stream.findUnique.mockResolvedValueOnce({ id: streamId });
       mockPrismaService.filter.findMany.mockResolvedValueOnce(expectedResult);
@@ -99,7 +115,6 @@ describe('FilterService', () => {
     });
 
     it('should throw NotFoundException when stream does not exist', async () => {
-      const streamId = 1;
       mockPrismaService.stream.findUnique.mockResolvedValueOnce(null);
 
       await expect(service.findAll(streamId)).rejects.toThrow(NotFoundException);
@@ -108,71 +123,90 @@ describe('FilterService', () => {
   });
 
   describe('findOne', () => {
-    it('should return a filter by id', async () => {
-      const expectedResult = { id: 1, type: FilterType.country, operation: FilterOperation.equals, value: 'US' };
-      mockPrismaService.filter.findUnique.mockResolvedValueOnce(expectedResult);
+    const streamId = 1;
+    const filterId = 1;
 
-      const result = await service.findOne(1);
+    it('should return a filter by id', async () => {
+      const expectedResult = {
+        id: filterId,
+        type: FilterTypes.country,
+        operation: FilterOperations.equals,
+        value: 'US',
+        streamId,
+      };
+      mockPrismaService.filter.findFirst.mockResolvedValueOnce(expectedResult);
+
+      const result = await service.findOne(streamId, filterId);
 
       expect(result).toEqual(expectedResult);
-      expect(mockPrismaService.filter.findUnique).toHaveBeenCalledWith({
-        where: { id: 1 },
+      expect(mockPrismaService.filter.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: filterId,
+          streamId,
+        },
       });
     });
 
     it('should throw NotFoundException when filter does not exist', async () => {
-      mockPrismaService.filter.findUnique.mockResolvedValueOnce(null);
+      mockPrismaService.filter.findFirst.mockResolvedValueOnce(null);
 
-      await expect(service.findOne(1)).rejects.toThrow(NotFoundException);
+      await expect(service.findOne(streamId, filterId)).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('update', () => {
-    const updateDto: CreateFilterDto = {
-      type: FilterType.browser,
-      operation: FilterOperation.equals,
-      value: 'Firefox',
+    const streamId = 1;
+    const filterId = 1;
+    const updateDto = {
+      type: FilterTypes.browser,
+      operation: FilterOperations.equals,
+      value: 'Chrome',
     };
 
     it('should update a filter when it exists', async () => {
-      const expectedResult = { id: 1, ...updateDto };
-      mockPrismaService.filter.findUnique.mockResolvedValueOnce({ id: 1 });
+      const expectedResult = { id: filterId, ...updateDto, streamId };
+      mockPrismaService.filter.findFirst.mockResolvedValueOnce({ id: filterId, streamId });
       mockPrismaService.filter.update.mockResolvedValueOnce(expectedResult);
 
-      const result = await service.update(1, updateDto);
+      const result = await service.update(streamId, filterId, updateDto);
 
       expect(result).toEqual(expectedResult);
       expect(mockPrismaService.filter.update).toHaveBeenCalledWith({
-        where: { id: 1 },
+        where: { id: filterId },
         data: updateDto,
       });
     });
 
     it('should throw NotFoundException when filter does not exist', async () => {
-      mockPrismaService.filter.findUnique.mockResolvedValueOnce(null);
+      mockPrismaService.filter.findFirst.mockResolvedValueOnce(null);
 
-      await expect(service.update(1, updateDto)).rejects.toThrow(NotFoundException);
+      await expect(service.update(streamId, filterId, updateDto)).rejects.toThrow(NotFoundException);
       expect(mockPrismaService.filter.update).not.toHaveBeenCalled();
     });
   });
 
   describe('remove', () => {
+    const streamId = 1;
+    const filterId = 1;
+
     it('should delete a filter when it exists', async () => {
-      mockPrismaService.filter.findUnique.mockResolvedValueOnce({ id: 1 });
-      mockPrismaService.filter.delete.mockResolvedValueOnce({ id: 1 });
+      mockPrismaService.filter.findFirst.mockResolvedValueOnce({ id: filterId, streamId });
+      mockPrismaService.filter.delete.mockResolvedValueOnce({ id: filterId });
 
-      await service.remove(1);
+      await service.remove(streamId, filterId);
 
+      expect(mockRedisService.deleteFilter).toHaveBeenCalledWith(filterId, streamId);
       expect(mockPrismaService.filter.delete).toHaveBeenCalledWith({
-        where: { id: 1 },
+        where: { id: filterId },
       });
     });
 
     it('should throw NotFoundException when filter does not exist', async () => {
-      mockPrismaService.filter.findUnique.mockResolvedValueOnce(null);
+      mockPrismaService.filter.findFirst.mockResolvedValueOnce(null);
 
-      await expect(service.remove(1)).rejects.toThrow(NotFoundException);
+      await expect(service.remove(streamId, filterId)).rejects.toThrow(NotFoundException);
       expect(mockPrismaService.filter.delete).not.toHaveBeenCalled();
+      expect(mockRedisService.deleteFilter).not.toHaveBeenCalled();
     });
   });
 }); 

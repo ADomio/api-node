@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { createClient, RedisClientType } from 'redis';
-import { Campaign, Stream, Filter } from '@prisma/client';
+import { Campaign, Stream, Filter, TrafficSource } from '@prisma/client';
 import { ConfigService } from '../config/config.service';
 
 @Injectable()
@@ -117,6 +117,30 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     if (!this.client) return [];
 
     return await this.client.sMembers(`stream:${streamId}:filters`);
+  }
+
+  // Traffic Source methods
+  async setTrafficSource(trafficSource: TrafficSource): Promise<void> {
+    if (!this.client) return;
+
+    await this.client.set(
+      `traffic-source:${trafficSource.id}`,
+      JSON.stringify(trafficSource),
+      { EX: 3600 } // 1 hour expiration
+    );
+  }
+
+  async getTrafficSource(id: number): Promise<TrafficSource | null> {
+    if (!this.client) return null;
+
+    const data = await this.client.get(`traffic-source:${id}`);
+    return data ? JSON.parse(data) : null;
+  }
+
+  async deleteTrafficSource(id: number): Promise<void> {
+    if (!this.client) return;
+
+    await this.client.del(`traffic-source:${id}`);
   }
 
   // Helper method to get all filters for router-go

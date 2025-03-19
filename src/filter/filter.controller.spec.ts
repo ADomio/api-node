@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { FilterController } from './filter.controller';
 import { FilterService } from './filter.service';
-import { CreateFilterDto, FilterOperation, FilterType } from './dto/create-filter.dto';
+import { CreateFilterDto } from './dto/create-filter.dto';
+import { FilterOperations, FilterTypes } from '@prisma/client';
 
 describe('FilterController', () => {
   let controller: FilterController;
@@ -40,16 +41,17 @@ describe('FilterController', () => {
 
   describe('create', () => {
     it('should create a filter', async () => {
+      const campaignId = 1;
       const streamId = 1;
       const createDto: CreateFilterDto = {
-        type: FilterType.country,
-        operation: FilterOperation.equals,
+        type: FilterTypes.country,
+        operation: FilterOperations.equals,
         value: 'US',
       };
-      const expectedResult = { id: 1, streamId, ...createDto };
+      const expectedResult = { id: 1, ...createDto, streamId };
       mockFilterService.create.mockResolvedValueOnce(expectedResult);
 
-      const result = await controller.create(streamId, createDto);
+      const result = await controller.create(campaignId, streamId, createDto);
 
       expect(result).toEqual(expectedResult);
       expect(mockFilterService.create).toHaveBeenCalledWith(streamId, createDto);
@@ -57,15 +59,16 @@ describe('FilterController', () => {
   });
 
   describe('findAll', () => {
-    it('should return all filters for a stream', async () => {
+    it('should return filters for stream', async () => {
+      const campaignId = 1;
       const streamId = 1;
       const expectedResult = [
-        { id: 1, streamId, type: FilterType.country, operation: FilterOperation.equals, value: 'US' },
-        { id: 2, streamId, type: FilterType.browser, operation: FilterOperation.equals, value: 'Chrome' },
+        { id: 1, type: FilterTypes.country, operation: FilterOperations.equals, value: 'US', streamId },
+        { id: 2, type: FilterTypes.browser, operation: FilterOperations.equals, value: 'Chrome', streamId },
       ];
       mockFilterService.findAll.mockResolvedValueOnce(expectedResult);
 
-      const result = await controller.findAll(streamId);
+      const result = await controller.findAll(campaignId, streamId);
 
       expect(result).toEqual(expectedResult);
       expect(mockFilterService.findAll).toHaveBeenCalledWith(streamId);
@@ -74,38 +77,53 @@ describe('FilterController', () => {
 
   describe('findOne', () => {
     it('should return a filter by id', async () => {
-      const expectedResult = { id: 1, type: FilterType.country, operation: FilterOperation.equals, value: 'US' };
+      const campaignId = 1;
+      const streamId = 1;
+      const filterId = 1;
+      const expectedResult = {
+        id: filterId,
+        type: FilterTypes.country,
+        operation: FilterOperations.equals,
+        value: 'US',
+        streamId,
+      };
       mockFilterService.findOne.mockResolvedValueOnce(expectedResult);
 
-      const result = await controller.findOne(1);
+      const result = await controller.findOne(campaignId, streamId, filterId);
 
       expect(result).toEqual(expectedResult);
-      expect(mockFilterService.findOne).toHaveBeenCalledWith(1);
+      expect(mockFilterService.findOne).toHaveBeenCalledWith(streamId, filterId);
     });
   });
 
   describe('update', () => {
     it('should update a filter', async () => {
-      const updateDto: CreateFilterDto = {
-        type: FilterType.browser,
-        operation: FilterOperation.equals,
-        value: 'Firefox',
+      const campaignId = 1;
+      const streamId = 1;
+      const filterId = 1;
+      const updateDto = {
+        type: FilterTypes.browser,
+        operation: FilterOperations.equals,
+        value: 'Chrome',
       };
-      const expectedResult = { id: 1, ...updateDto };
+      const expectedResult = { id: filterId, ...updateDto, streamId };
       mockFilterService.update.mockResolvedValueOnce(expectedResult);
 
-      const result = await controller.update(1, updateDto);
+      const result = await controller.update(campaignId, streamId, filterId, updateDto);
 
       expect(result).toEqual(expectedResult);
-      expect(mockFilterService.update).toHaveBeenCalledWith(1, updateDto);
+      expect(mockFilterService.update).toHaveBeenCalledWith(streamId, filterId, updateDto);
     });
   });
 
   describe('remove', () => {
     it('should delete a filter', async () => {
-      await controller.remove(1);
+      const campaignId = 1;
+      const streamId = 1;
+      const filterId = 1;
+      await controller.remove(campaignId, streamId, filterId);
 
-      expect(mockFilterService.remove).toHaveBeenCalledWith(1);
+      expect(mockFilterService.remove).toHaveBeenCalledWith(streamId, filterId);
     });
   });
 }); 

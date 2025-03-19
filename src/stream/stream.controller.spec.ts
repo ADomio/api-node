@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { StreamController } from './stream.controller';
 import { StreamService } from './stream.service';
-import { CreateStreamDto, StreamStatus } from './dto/create-stream.dto';
+import { CreateStreamDto } from './dto/create-stream.dto';
+import { Statuses } from '@prisma/client';
 
 describe('StreamController', () => {
   let controller: StreamController;
@@ -40,40 +41,30 @@ describe('StreamController', () => {
 
   describe('create', () => {
     it('should create a stream', async () => {
+      const campaignId = 1;
       const createDto: CreateStreamDto = {
-        campaignId: 1,
         name: 'Test Stream',
         targetUrl: 'https://example.com',
-        status: StreamStatus.active,
+        status: Statuses.active,
         weight: 1,
       };
-      const expectedResult = { id: 1, ...createDto };
+      const expectedResult = { id: 1, ...createDto, campaignId };
       mockStreamService.create.mockResolvedValueOnce(expectedResult);
 
-      const result = await controller.create(createDto);
+      const result = await controller.create(campaignId, createDto);
 
       expect(result).toEqual(expectedResult);
-      expect(mockStreamService.create).toHaveBeenCalledWith(createDto);
+      expect(mockStreamService.create).toHaveBeenCalledWith(campaignId, createDto);
     });
   });
 
   describe('findAll', () => {
-    it('should return all streams when no campaignId provided', async () => {
-      const expectedResult = [
-        { id: 1, name: 'Stream 1' },
-        { id: 2, name: 'Stream 2' },
-      ];
-      mockStreamService.findAll.mockResolvedValueOnce(expectedResult);
-
-      const result = await controller.findAll(undefined);
-
-      expect(result).toEqual(expectedResult);
-      expect(mockStreamService.findAll).toHaveBeenCalledWith(undefined);
-    });
-
-    it('should return streams for specific campaign when campaignId provided', async () => {
+    it('should return streams for campaign', async () => {
       const campaignId = 1;
-      const expectedResult = [{ id: 1, name: 'Stream 1', campaignId }];
+      const expectedResult = [
+        { id: 1, name: 'Stream 1', campaignId },
+        { id: 2, name: 'Stream 2', campaignId },
+      ];
       mockStreamService.findAll.mockResolvedValueOnce(expectedResult);
 
       const result = await controller.findAll(campaignId);
@@ -85,40 +76,45 @@ describe('StreamController', () => {
 
   describe('findOne', () => {
     it('should return a stream by id', async () => {
-      const expectedResult = { id: 1, name: 'Test Stream' };
+      const campaignId = 1;
+      const streamId = 1;
+      const expectedResult = { id: streamId, name: 'Test Stream', campaignId };
       mockStreamService.findOne.mockResolvedValueOnce(expectedResult);
 
-      const result = await controller.findOne(1);
+      const result = await controller.findOne(campaignId, streamId);
 
       expect(result).toEqual(expectedResult);
-      expect(mockStreamService.findOne).toHaveBeenCalledWith(1);
+      expect(mockStreamService.findOne).toHaveBeenCalledWith(campaignId, streamId);
     });
   });
 
   describe('update', () => {
     it('should update a stream', async () => {
-      const updateDto: CreateStreamDto = {
-        campaignId: 1,
+      const campaignId = 1;
+      const streamId = 1;
+      const updateDto = {
         name: 'Updated Stream',
         targetUrl: 'https://example.com/updated',
-        status: StreamStatus.inactive,
+        status: Statuses.inactive,
         weight: 2,
       };
-      const expectedResult = { id: 1, ...updateDto };
+      const expectedResult = { id: streamId, ...updateDto, campaignId };
       mockStreamService.update.mockResolvedValueOnce(expectedResult);
 
-      const result = await controller.update(1, updateDto);
+      const result = await controller.update(campaignId, streamId, updateDto);
 
       expect(result).toEqual(expectedResult);
-      expect(mockStreamService.update).toHaveBeenCalledWith(1, updateDto);
+      expect(mockStreamService.update).toHaveBeenCalledWith(campaignId, streamId, updateDto);
     });
   });
 
   describe('remove', () => {
     it('should delete a stream', async () => {
-      await controller.remove(1);
+      const campaignId = 1;
+      const streamId = 1;
+      await controller.remove(campaignId, streamId);
 
-      expect(mockStreamService.remove).toHaveBeenCalledWith(1);
+      expect(mockStreamService.remove).toHaveBeenCalledWith(campaignId, streamId);
     });
   });
 }); 

@@ -5,6 +5,7 @@ import { RedisModule } from './redis/redis.module';
 import { CampaignModule } from './campaign/campaign.module';
 import { StreamModule } from './stream/stream.module';
 import { FilterModule } from './filter/filter.module';
+import { TrafficSourceModule } from './traffic-source/traffic-source.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { FilterModule } from './filter/filter.module';
     CampaignModule,
     StreamModule,
     FilterModule,
+    TrafficSourceModule,
   ],
   controllers: [],
   providers: [],
