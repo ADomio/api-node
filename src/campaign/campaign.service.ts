@@ -52,6 +52,7 @@ export class CampaignService {
         code,
         status: createCampaignDto.status,
         currency: createCampaignDto.currency,
+        trafficSourceId: createCampaignDto.trafficSourceId
       },
     });
     await this.redis.setCampaign(campaign);
@@ -78,13 +79,6 @@ export class CampaignService {
     // If not in Redis, get from DB and cache
     const campaign = await this.prisma.campaign.findUnique({
       where: { id },
-      include: {
-        streams: {
-          include: {
-            filters: true,
-          },
-        },
-      },
     });
     
     if (!campaign) {
@@ -136,10 +130,14 @@ export class CampaignService {
   }
 
   async remove(id: number): Promise<void> {
-    await this.findOne(id); // Will throw if not found
-    await this.redis.deleteCampaign(id);
+    const campaign = await this.findOne(id); // Will throw if not found
+
+    // Delete campaign from database (this will cascade delete streams, filters, expenses, and profits)
     await this.prisma.campaign.delete({
       where: { id },
     });
+
+    // Clean up Redis cache
+    await this.redis.deleteCampaign(id);
   }
 } 

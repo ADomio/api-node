@@ -28,11 +28,21 @@ export class FilterService {
         streamId,
       },
     });
-    await this.redis.setFilter(filter);
+
+    // Get existing filters and update cache
+    const existingFilters = await this.findAll(streamId);
+    await this.redis.setFilters(streamId, [...existingFilters, filter]);
+
     return filter;
   }
 
   async findAll(streamId: number): Promise<Filter[]> {
+    // Try to get filters from Redis first
+    const cachedFilters = await this.redis.getFilters(streamId);
+    if (cachedFilters.length > 0) {
+      return cachedFilters;
+    }
+
     // Verify stream exists
     const stream = await this.prisma.stream.findUnique({
       where: { id: streamId },
@@ -42,12 +52,25 @@ export class FilterService {
       throw new NotFoundException(`Stream with ID ${streamId} not found`);
     }
 
-    return this.prisma.filter.findMany({
+    // Get filters from database
+    const filters = await this.prisma.filter.findMany({
       where: { streamId },
     });
+
+    // Cache the filters
+    await this.redis.setFilters(streamId, filters);
+
+    return filters;
   }
 
   async findOne(streamId: number, id: number): Promise<Filter> {
+    // Try to get filters from Redis first
+    const cachedFilters = await this.redis.getFilters(streamId);
+    const cachedFilter = cachedFilters.find(f => f.id === id);
+    if (cachedFilter) {
+      return cachedFilter;
+    }
+
     const filter = await this.prisma.filter.findFirst({
       where: {
         id,
@@ -70,7 +93,12 @@ export class FilterService {
       where: { id },
       data: updateFilterDto,
     });
-    await this.redis.setFilter(updatedFilter);
+
+    // Get all filters and update the modified one in cache
+    const filters = await this.findAll(streamId);
+    const updatedFilters = filters.map(f => f.id === id ? updatedFilter : f);
+    await this.redis.setFilters(streamId, updatedFilters);
+
     return updatedFilter;
   }
 
@@ -78,9 +106,13 @@ export class FilterService {
     // Verify filter exists in stream
     await this.findOne(streamId, id);
 
-    await this.redis.deleteFilter(id, streamId);
     await this.prisma.filter.delete({
       where: { id },
     });
+
+    // Get remaining filters and update cache
+    const filters = await this.findAll(streamId);
+    const remainingFilters = filters.filter(f => f.id !== id);
+    await this.redis.setFilters(streamId, remainingFilters);
   }
 } 

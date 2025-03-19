@@ -59,7 +59,7 @@ model Campaign {
 model CampaignExpense {
   id         Int      @id @default(autoincrement())
   createdAt  DateTime @default(now()) @map("created_at")
-  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   campaignId Int      @map("campaign_id")
   amount     Float
 
@@ -69,7 +69,7 @@ model CampaignExpense {
 model CampaignProfit {
   id         Int      @id @default(autoincrement())
   createdAt  DateTime @default(now()) @map("created_at")
-  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   campaignId Int      @map("campaign_id")
   amount     Float
 
@@ -80,7 +80,7 @@ model Stream {
   id         Int      @id @default(autoincrement())
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
-  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   campaignId Int      @map("campaign_id")
   name       String?
   targetUrl  String   @map("target_url")
@@ -95,7 +95,7 @@ model Filter {
   id        Int              @id @default(autoincrement())
   createdAt DateTime         @default(now()) @map("created_at")
   updatedAt DateTime         @updatedAt @map("updated_at")
-  stream    Stream           @relation(fields: [streamId], references: [id])
+  stream    Stream           @relation(fields: [streamId], references: [id], onDelete: Cascade)
   streamId  Int              @map("stream_id")
   type      FilterTypes
   operation FilterOperations

@@ -50,12 +50,11 @@ export class CreateCampaignDto {
   profit?: number = 0;
 
   @ApiProperty({
-    description: 'Campaign expenses',
-    example: 500.25,
-    default: 0,
+    description: 'Traffic Source',
+    example: 1,
     required: false,
   })
   @IsNumber()
   @IsOptional()
-  expenses?: number = 0;
+  trafficSourceId?: number;
 } 

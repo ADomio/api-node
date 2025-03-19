@@ -1,7 +1,7 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
-import { createClient, RedisClientType } from 'redis';
-import { ConfigService } from '@nestjs/config';
-import { Campaign, Stream, Filter } from '@prisma/client';
+import {Injectable, Logger, OnModuleDestroy, OnModuleInit} from '@nestjs/common';
+import {createClient, RedisClientType} from 'redis';
+import {ConfigService} from '@nestjs/config';
+import {Campaign, Filter, Stream} from '@prisma/client';
 
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
@@ -56,16 +56,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
       const campaign = JSON.parse(campaignData);
 
-      // Get stream IDs
-      const streamIds = await this.client.sMembers(`campaign:${id}:stream_ids`);
-
-      // Get streams and their filters
-      campaign.streams = await Promise.all(
-        streamIds.map(async (streamId) => {
-          const stream = await this.getStream(parseInt(streamId));
-          return stream;
-        })
-      ).then(streams => streams.filter(Boolean));
+      // Get all streams for this campaign
+      campaign.streams = await this.getStreams(id);
 
       return campaign;
     } catch (error) {
@@ -74,33 +66,37 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async setCampaign(campaign: Campaign & { streams?: Stream[] }): Promise<void> {
+  async getCampaignByCode(code: string): Promise<Campaign | null> {
+    if (!this.client) return null;
+
+    try {
+      // Get campaign ID from code
+      const campaignId = await this.client.get(`campaign_code:${code}`);
+      if (!campaignId) return null;
+
+      return this.getCampaign(parseInt(campaignId));
+    } catch (error) {
+      this.logger.error(`Error getting campaign by code ${code} from cache:`, error);
+      return null;
+    }
+  }
+
+  async setCampaign(campaign: Campaign): Promise<void> {
     if (!this.client) return;
 
     try {
-      const { streams, ...campaignData } = campaign;
-
-      // Cache basic campaign data
+      // Cache basic campaign data with TTL
       await this.client.set(
         `campaign:${campaign.id}`,
-        JSON.stringify(campaignData),
+        JSON.stringify(campaign),
         { EX: this.CACHE_TTL }
       );
 
-      // Cache streams if they exist
-      if (streams?.length) {
-        // Store stream IDs in a set
-        await this.client.del(`campaign:${campaign.id}:stream_ids`);
-        await this.client.sAdd(
-          `campaign:${campaign.id}:stream_ids`,
-          streams.map(s => s.id.toString())
-        );
-
-        // Cache each stream
-        for (const stream of streams) {
-          await this.setStream(stream);
-        }
-      }
+      // Cache campaign code to ID mapping permanently (no TTL)
+      await this.client.set(
+        `campaign_code:${campaign.code}`,
+        campaign.id.toString()
+      );
     } catch (error) {
       this.logger.error(`Error setting campaign ${campaign.id} in cache:`, error);
     }
@@ -110,140 +106,97 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     if (!this.client) return;
 
     try {
-      // Get stream IDs before deleting campaign
-      const streamIds = await this.client.sMembers(`campaign:${id}:stream_ids`);
-
-      // Delete streams and their filters
-      for (const streamId of streamIds) {
-        await this.deleteStream(parseInt(streamId), id);
+      // Get campaign to get its code before deletion
+      const campaignData = await this.client.get(`campaign:${id}`);
+      if (campaignData) {
+        const campaign = JSON.parse(campaignData);
+        // Delete all campaign-related keys
+        await Promise.all([
+          this.client.del(`campaign:${id}`),
+          this.client.del(`campaign:${id}:streams`),
+          this.client.del(`campaign_code:${campaign.code}`)
+        ]);
       }
-
-      // Delete campaign data and stream IDs set
-      await this.client.del(`campaign:${id}`);
-      await this.client.del(`campaign:${id}:stream_ids`);
     } catch (error) {
       this.logger.error(`Error deleting campaign ${id} from cache:`, error);
     }
   }
 
   // Stream methods
-  async getStream(id: number): Promise<Stream | null> {
-    if (!this.client) return null;
+  async getStreams(campaignId: number): Promise<Stream[]> {
+    if (!this.client) return [];
 
     try {
-      const streamData = await this.client.get(`stream:${id}`);
-      if (!streamData) return null;
+      const streamsData = await this.client.get(`campaign:${campaignId}:streams`);
+      if (!streamsData) return [];
 
-      const stream = JSON.parse(streamData);
-
-      // Get filter IDs
-      const filterIds = await this.client.sMembers(`stream:${id}:filter_ids`);
-
-      // Get filters
-      stream.filters = await Promise.all(
-        filterIds.map(async (filterId) => {
-          const filter = await this.getFilter(parseInt(filterId));
-          return filter;
-        })
-      ).then(filters => filters.filter(Boolean));
-
-      return stream;
+      return JSON.parse(streamsData);
     } catch (error) {
-      this.logger.error(`Error getting stream ${id} from cache:`, error);
-      return null;
+      this.logger.error(`Error getting streams for campaign ${campaignId} from cache:`, error);
+      return [];
     }
   }
 
-  async setStream(stream: Stream & { filters?: Filter[] }): Promise<void> {
+  async setStreams(campaignId: number, streams: Stream[]): Promise<void> {
     if (!this.client) return;
 
     try {
-      const { filters, ...streamData } = stream;
-
-      // Cache basic stream data
       await this.client.set(
-        `stream:${stream.id}`,
-        JSON.stringify(streamData),
+        `campaign:${campaignId}:streams`,
+        JSON.stringify(streams),
         { EX: this.CACHE_TTL }
       );
-
-      // Cache filters if they exist
-      if (filters?.length) {
-        // Store filter IDs in a set
-        await this.client.del(`stream:${stream.id}:filter_ids`);
-        await this.client.sAdd(
-          `stream:${stream.id}:filter_ids`,
-          filters.map(f => f.id.toString())
-        );
-
-        // Cache each filter
-        for (const filter of filters) {
-          await this.setFilter(filter);
-        }
-      }
     } catch (error) {
-      this.logger.error(`Error setting stream ${stream.id} in cache:`, error);
+      this.logger.error(`Error setting streams for campaign ${campaignId} in cache:`, error);
     }
   }
 
-  async deleteStream(id: number, campaignId: number): Promise<void> {
+  async deleteStreams(campaignId: number): Promise<void> {
     if (!this.client) return;
 
     try {
-      // Get filter IDs before deleting stream
-      const filterIds = await this.client.sMembers(`stream:${id}:filter_ids`);
-
-      // Delete filters
-      for (const filterId of filterIds) {
-        await this.deleteFilter(parseInt(filterId), id);
-      }
-
-      // Delete stream data and filter IDs set
-      await this.client.del(`stream:${id}`);
-      await this.client.del(`stream:${id}:filter_ids`);
-
-      // Remove stream ID from campaign's stream set
-      await this.client.sRem(`campaign:${campaignId}:stream_ids`, id.toString());
+      await this.client.del(`campaign:${campaignId}:streams`);
     } catch (error) {
-      this.logger.error(`Error deleting stream ${id} from cache:`, error);
+      this.logger.error(`Error deleting streams for campaign ${campaignId} from cache:`, error);
     }
   }
 
   // Filter methods
-  async getFilter(id: number): Promise<Filter | null> {
-    if (!this.client) return null;
+  async getFilters(streamId: number): Promise<Filter[]> {
+    if (!this.client) return [];
 
     try {
-      const data = await this.client.get(`filter:${id}`);
-      return data ? JSON.parse(data) : null;
+      const filtersData = await this.client.get(`stream:${streamId}:filters`);
+      if (!filtersData) return [];
+
+      return JSON.parse(filtersData);
     } catch (error) {
-      this.logger.error(`Error getting filter ${id} from cache:`, error);
-      return null;
+      this.logger.error(`Error getting filters for stream ${streamId} from cache:`, error);
+      return [];
     }
   }
 
-  async setFilter(filter: Filter): Promise<void> {
+  async setFilters(streamId: number, filters: Filter[]): Promise<void> {
     if (!this.client) return;
 
     try {
       await this.client.set(
-        `filter:${filter.id}`,
-        JSON.stringify(filter),
+        `stream:${streamId}:filters`,
+        JSON.stringify(filters),
         { EX: this.CACHE_TTL }
       );
     } catch (error) {
-      this.logger.error(`Error setting filter ${filter.id} in cache:`, error);
+      this.logger.error(`Error setting filters for stream ${streamId} in cache:`, error);
     }
   }
 
-  async deleteFilter(id: number, streamId: number): Promise<void> {
+  async deleteFilters(streamId: number): Promise<void> {
     if (!this.client) return;
 
     try {
-      await this.client.del(`filter:${id}`);
-      await this.client.sRem(`stream:${streamId}:filter_ids`, id.toString());
+      await this.client.del(`stream:${streamId}:filters`);
     } catch (error) {
-      this.logger.error(`Error deleting filter ${id} from cache:`, error);
+      this.logger.error(`Error deleting filters for stream ${streamId} from cache:`, error);
     }
   }
 

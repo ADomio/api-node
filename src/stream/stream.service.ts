@@ -28,11 +28,23 @@ export class StreamService {
         campaignId,
       },
     });
-    await this.redis.setStream(stream);
+
+    // Get all existing streams for this campaign
+    const existingStreams = await this.findAll(campaignId);
+    
+    // Add new stream to the list and update Redis
+    await this.redis.setStreams(campaignId, [...existingStreams, stream]);
+
     return stream;
   }
 
   async findAll(campaignId: number): Promise<Stream[]> {
+    // Try to get streams from Redis first
+    const cachedStreams = await this.redis.getStreams(campaignId);
+    if (cachedStreams.length > 0) {
+      return cachedStreams;
+    }
+
     // Verify campaign exists
     const campaign = await this.prisma.campaign.findUnique({
       where: { id: campaignId },
@@ -42,22 +54,29 @@ export class StreamService {
       throw new NotFoundException(`Campaign with ID ${campaignId} not found`);
     }
 
-    return this.prisma.stream.findMany({
+    // Get streams from database
+    const streams = await this.prisma.stream.findMany({
       where: { campaignId },
-      include: {
-        filters: true,
-      },
     });
+
+    // Cache the streams
+    await this.redis.setStreams(campaignId, streams);
+
+    return streams;
   }
 
   async findOne(campaignId: number, id: number): Promise<Stream> {
+    // Try to get streams from Redis first
+    const cachedStreams = await this.redis.getStreams(campaignId);
+    const cachedStream = cachedStreams.find(s => s.id === id);
+    if (cachedStream) {
+      return cachedStream;
+    }
+
     const stream = await this.prisma.stream.findFirst({
       where: {
         id,
         campaignId,
-      },
-      include: {
-        filters: true,
       },
     });
 
@@ -72,22 +91,36 @@ export class StreamService {
     // Verify stream exists in campaign
     await this.findOne(campaignId, id);
 
-    return this.prisma.stream.update({
+    const updatedStream = await this.prisma.stream.update({
       where: { id },
       data: updateStreamDto,
-      include: {
-        filters: true,
-      },
     });
+
+    // Get all streams and update the modified one
+    const streams = await this.findAll(campaignId);
+    const updatedStreams = streams.map(s => s.id === id ? updatedStream : s);
+    
+    // Update Redis cache
+    await this.redis.setStreams(campaignId, updatedStreams);
+
+    return updatedStream;
   }
 
   async remove(campaignId: number, id: number): Promise<void> {
     // Verify stream exists in campaign
     await this.findOne(campaignId, id);
 
-    await this.redis.deleteStream(id, campaignId);
+    // Delete stream from Redis cache (this will cascade delete filters in the database)
+    await this.redis.deleteFilters(id);
+
+    // Delete stream from database (this will cascade delete filters)
     await this.prisma.stream.delete({
       where: { id },
     });
+
+    // Get remaining streams and update Redis
+    const streams = await this.findAll(campaignId);
+    const remainingStreams = streams.filter(s => s.id !== id);
+    await this.redis.setStreams(campaignId, remainingStreams);
   }
 } 
