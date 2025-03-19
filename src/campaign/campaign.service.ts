@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
-import { Campaign, Statuses, Currencies } from '@prisma/client';
+import { Campaign } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
 
@@ -59,7 +59,15 @@ export class CampaignService {
   }
 
   async findAll(): Promise<Campaign[]> {
-    return this.prisma.campaign.findMany();
+    return this.prisma.campaign.findMany({
+      include: {
+        streams: {
+          include: {
+            filters: true,
+          },
+        },
+      },
+    });
   }
 
   async findOne(id: number): Promise<Campaign> {
@@ -70,6 +78,13 @@ export class CampaignService {
     // If not in Redis, get from DB and cache
     const campaign = await this.prisma.campaign.findUnique({
       where: { id },
+      include: {
+        streams: {
+          include: {
+            filters: true,
+          },
+        },
+      },
     });
     
     if (!campaign) {
@@ -83,6 +98,13 @@ export class CampaignService {
   async findByCode(code: string): Promise<Campaign> {
     const campaign = await this.prisma.campaign.findUnique({
       where: { code },
+      include: {
+        streams: {
+          include: {
+            filters: true,
+          },
+        },
+      },
     });
 
     if (!campaign) {
