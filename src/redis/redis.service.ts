@@ -7,12 +7,12 @@ import {Campaign, Filter, Stream} from '@prisma/client';
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private client: RedisClientType | null = null;
   private readonly logger = new Logger(RedisService.name);
-  private readonly CACHE_TTL = 3600; // 1 hour in seconds
+  private readonly CACHE_TTL = 60 * 60 * 24; // 24 hours in seconds
 
   constructor(private configService: ConfigService) {
     if (!this.client) {
       this.client = createClient({
-        url: this.configService.get<string>('REDIS_URL') || 'redis://localhost:6379',
+        url: this.configService.getOrThrow<string>('REDIS_URL'),
       });
 
       this.client.on('connect', () => {

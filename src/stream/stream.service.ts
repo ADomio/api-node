@@ -29,11 +29,11 @@ export class StreamService {
       },
     });
 
-    // Get all existing streams for this campaign
-    const existingStreams = await this.findAll(campaignId);
-    
-    // Add new stream to the list and update Redis
-    await this.redis.setStreams(campaignId, [...existingStreams, stream]);
+    // Get existing streams directly from database and update cache
+    const existingStreams = await this.prisma.stream.findMany({
+      where: { campaignId },
+    });
+    await this.redis.setStreams(campaignId, existingStreams);
 
     return stream;
   }

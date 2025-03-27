@@ -24,6 +24,7 @@ enum FilterTypes {
   utm_source
   utm_medium
   utm_campaign
+  query_param
 }
 
 enum FilterOperations {
@@ -92,14 +93,15 @@ model Stream {
 }
 
 model Filter {
-  id        Int              @id @default(autoincrement())
-  createdAt DateTime         @default(now()) @map("created_at")
-  updatedAt DateTime         @updatedAt @map("updated_at")
-  stream    Stream           @relation(fields: [streamId], references: [id], onDelete: Cascade)
-  streamId  Int              @map("stream_id")
+  id        Int           @id @default(autoincrement())
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  stream    Stream        @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  streamId  Int          @map("stream_id")
   type      FilterTypes
   operation FilterOperations
   value     String
+  paramName String?      @map("param_name")
 
   @@map("filters")
 }

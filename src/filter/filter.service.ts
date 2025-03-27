@@ -29,9 +29,11 @@ export class FilterService {
       },
     });
 
-    // Get existing filters and update cache
-    const existingFilters = await this.findAll(streamId);
-    await this.redis.setFilters(streamId, [...existingFilters, filter]);
+    // Get existing filters directly from database and update cache
+    const existingFilters = await this.prisma.filter.findMany({
+      where: { streamId },
+    });
+    await this.redis.setFilters(streamId, existingFilters);
 
     return filter;
   }
