@@ -17,9 +17,13 @@ RUN npm run build
 EXPOSE 5001
 
 FROM node:22-alpine
+WORKDIR /app
 COPY --from=BUILD_IMAGE /app/dist ./dist
 COPY --from=BUILD_IMAGE /app/node_modules ./node_modules
 COPY --from=BUILD_IMAGE /app/package*.json ./
 COPY --from=BUILD_IMAGE /app/tsconfig.json ./
+
+# Create directory for .env file
+RUN mkdir -p /app
 
 CMD ["npm", "start"]
