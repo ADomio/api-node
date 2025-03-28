@@ -11,9 +11,26 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   constructor(private configService: ConfigService) {
     if (!this.client) {
-      this.client = createClient({
-        url: this.configService.getOrThrow<string>('REDIS_URL'),
-      });
+      const redisUrl = this.configService.get<string>('REDIS_URL');
+      const redisHost = this.configService.get<string>('REDIS_HOST');
+      const redisPort = this.configService.get<number>('REDIS_PORT');
+      const redisPassword = this.configService.get<string>('REDIS_PASSWORD');
+
+      if (redisUrl) {
+        this.client = createClient({
+          url: redisUrl,
+        });
+      } else if (redisHost && redisPort) {
+        this.client = createClient({
+          socket: {
+            host: redisHost,
+            port: redisPort,
+          },
+          password: redisPassword,
+        });
+      } else {
+        throw new Error('Redis configuration is missing. Please provide either REDIS_URL or REDIS_HOST and REDIS_PORT');
+      }
 
       this.client.on('connect', () => {
         this.logger.log('Successfully connected to Redis');
