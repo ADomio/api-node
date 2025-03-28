@@ -53,25 +53,8 @@ jobs:
           uname -a
           docker --version
           
-          # Create config directory if it doesn't exist
+          # Ensure config directory exists
           mkdir -p /etc/api-node
-          
-          # Ensure .env file exists and has correct permissions
-          if [ ! -f /etc/api-node/.env ]; then
-            echo "Creating .env file..."
-            cat > /etc/api-node/.env << 'EOL'
-            PORT=5001
-            DATABASE_URL="postgresql://tds_user:tds_pass@95.215.207.172:5432/tds?schema=public"
-            USE_REDIS=true
-            REDIS_URL=redis://212.8.244.106:6379
-            REDIS_HOST=212.8.244.106
-            REDIS_PORT=6379
-            REDIS_PASSWORD=tds_pass
-            EOL
-          fi
-          
-          # Set correct permissions
-          chmod 600 /etc/api-node/.env
           
           # Pull the latest image
           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/api-node:latest
@@ -99,19 +82,12 @@ jobs:
             exit 1
           fi
           
-          # Verify .env file is mounted correctly
-          echo "Checking .env file in container:"
-          docker exec api-node ls -l /app/.env
-          docker exec api-node cat /app/.env
-          
           # Check if application is responding
           echo "Checking application health..."
           if ! curl -s http://localhost:5001/health | grep -q "ok"; then
             echo "Application health check failed"
             echo "Container logs:"
             docker logs api-node
-            echo "Environment variables:"
-            docker exec api-node env
             exit 1
           fi
           
