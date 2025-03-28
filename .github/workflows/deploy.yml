@@ -86,7 +86,10 @@ jobs:
           echo "Checking application health..."
           if ! curl -s http://localhost:5001/health | grep -q "ok"; then
             echo "Application health check failed"
+            echo "Container logs:"
             docker logs api-node
+            echo "Environment variables:"
+            docker exec api-node env
             exit 1
           fi
           

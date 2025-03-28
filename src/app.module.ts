@@ -6,6 +6,8 @@ import { CampaignModule } from './campaign/campaign.module';
 import { StreamModule } from './stream/stream.module';
 import { FilterModule } from './filter/filter.module';
 import { TrafficSourceModule } from './traffic-source/traffic-source.module';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 
 @Module({
   imports: [
@@ -17,7 +19,7 @@ import { TrafficSourceModule } from './traffic-source/traffic-source.module';
     FilterModule,
     TrafficSourceModule,
   ],
-  controllers: [],
-  providers: [],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}
