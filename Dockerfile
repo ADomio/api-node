@@ -6,6 +6,7 @@ COPY src src/
 COPY prisma prisma/
 COPY *.json ./
 COPY *.ts ./
+COPY tsconfig.json ./
 
 SHELL ["/bin/sh", "-c"]
 
@@ -19,5 +20,6 @@ FROM node:22-alpine
 COPY --from=BUILD_IMAGE /app/dist ./dist
 COPY --from=BUILD_IMAGE /app/node_modules ./node_modules
 COPY --from=BUILD_IMAGE /app/package*.json ./
+COPY --from=BUILD_IMAGE /app/tsconfig.json ./
 
 CMD ["npm", "start"]
