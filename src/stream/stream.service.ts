@@ -41,7 +41,7 @@ export class StreamService {
   async findAll(campaignId: number): Promise<Stream[]> {
     // Try to get streams from Redis first
     const cachedStreams = await this.redis.getStreams(campaignId);
-    if (cachedStreams.length > 0) {
+    if (cachedStreams) {
       return cachedStreams;
     }
 
@@ -59,7 +59,7 @@ export class StreamService {
       where: { campaignId },
     });
 
-    // Cache the streams
+    // Cache the streams (will be empty array if no streams)
     await this.redis.setStreams(campaignId, streams);
 
     return streams;

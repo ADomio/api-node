@@ -158,9 +158,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     if (!this.client) return;
 
     try {
+      // Ensure we always store an array, even if empty
+      const streamsToStore = streams || [];
       await this.client.set(
         `campaign:${campaignId}:streams`,
-        JSON.stringify(streams),
+        JSON.stringify(streamsToStore),
         { EX: this.CACHE_TTL }
       );
     } catch (error) {
