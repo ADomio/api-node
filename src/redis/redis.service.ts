@@ -140,17 +140,17 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   // Stream methods
-  async getStreams(campaignId: number): Promise<Stream[]> {
-    if (!this.client) return [];
+  async getStreams(campaignId: number): Promise<Stream[] | null> {
+    if (!this.client) return null;
 
     try {
       const streamsData = await this.client.get(`campaign:${campaignId}:streams`);
-      if (!streamsData) return [];
+      if (!streamsData) return null;
 
       return JSON.parse(streamsData);
     } catch (error) {
       this.logger.error(`Error getting streams for campaign ${campaignId} from cache:`, error);
-      return [];
+      return null;
     }
   }
 
