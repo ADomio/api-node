@@ -68,7 +68,7 @@ export class StreamService {
   async findOne(campaignId: number, id: number): Promise<Stream> {
     // Try to get streams from Redis first
     const cachedStreams = await this.redis.getStreams(campaignId);
-    const cachedStream = cachedStreams.find(s => s.id === id);
+    const cachedStream = cachedStreams?.find(s => s.id === id);
     if (cachedStream) {
       return cachedStream;
     }
