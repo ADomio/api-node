@@ -41,7 +41,7 @@ export class FilterService {
   async findAll(streamId: number): Promise<Filter[]> {
     // Try to get filters from Redis first
     const cachedFilters = await this.redis.getFilters(streamId);
-    if (cachedFilters.length > 0) {
+    if (cachedFilters && cachedFilters.length > 0) {
       return cachedFilters;
     }
 
@@ -68,7 +68,7 @@ export class FilterService {
   async findOne(streamId: number, id: number): Promise<Filter> {
     // Try to get filters from Redis first
     const cachedFilters = await this.redis.getFilters(streamId);
-    const cachedFilter = cachedFilters.find(f => f.id === id);
+    const cachedFilter = cachedFilters?.find(f => f.id === id);
     if (cachedFilter) {
       return cachedFilter;
     }
